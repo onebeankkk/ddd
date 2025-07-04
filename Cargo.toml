@@ -9,3 +9,6 @@ tokio = { version = "1.45.1", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 chrono = "0.4"
+# 설정 파일 처리를 위해 추가
+config = "0.14" 
+

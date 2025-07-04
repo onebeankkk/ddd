@@ -1,0 +1,13 @@
+# config.toml
+
+# 수집할 암호화폐의 ID (예: "bitcoin", "ethereum", "dogecoin")
+crypto_id = "bitcoin"
+
+# 기준이 될 통화 (예: "usd", "eur", "jpy")
+vs_currency = "usd"
+
+# 데이터를 수집할 시간 간격 (초 단위)
+interval_seconds = 60
+
+# 데이터를 저장할 CSV 파일 이름
+log_file = "price_log_csv"
