@@ -28,18 +28,44 @@ struct PriceData {
 type ApiResponse = HashMap<String, PriceData>;
 
 // Quick Sort 알고리즘
+
 fn quick_sort(arr: &mut [f64]) {
     if arr.len() > 1 {
         let pivot_index = partition(arr);
+        
         let (left, right) = arr.split_at_mut(pivot_index);
         quick_sort(left);
-        quick_sort(&mut right[1..]);
+        // 피벗 자체는 이미 정렬된 위치에 있으므로, 그 다음부터 정렬.
+        if !right.is_empty() {
+            quick_sort(&mut right[1..]);
+        }
     }
 }
 
+// 배열의 중간에 있는 값을 피벗으로 선택
+// 수정 : 세 값의 중앙값 방식
 fn partition(arr: &mut [f64]) -> usize {
-    let pivot_index = arr.len() / 2;
-    arr.swap(pivot_index, arr.len() - 1);
+    let len = arr.len();
+    let mid = len / 2;
+    let last = len - 1;
+
+    // 배열의 첫 값, 중간 값, 마지막 값 세 후보를 정렬.
+    if arr[0] > arr[mid] {
+        arr.swap(0, mid);
+    }
+    if arr[0] > arr[last] {
+        arr.swap(0, last);
+    }
+    if arr[mid] > arr[last] {
+        arr.swap(mid, last);
+    }
+    // 이 시점에서  arr[mid]는 세 값 중 중앙값.
+    
+
+    // 찾은 중앙값(피벗)을 배열의 끝으로 보냄
+    arr.swap(mid, last);
+
+    // 피벗을 기준으로 분할 작업을 수행 (기존 로직과 동일)
     let mut i = 0;
     for j in 0..arr.len() - 1 {
         if arr[j] <= arr[arr.len() - 1] {
@@ -119,23 +145,6 @@ async fn fetch_prices(client: &Client, crypto_ids: &[String], vs_currency: &str)
     Ok(response.json::<ApiResponse>().await?)
 }
 
-//     let mut api_data = response.json::<ApiResponse<PrinceData>>().await?;
-
-//     // 응답에서 가격 데이터 추출
-//     let price_info: PrinceData = api_data.remove(crypto_id)
-//     .ok_or_else(|| format!("Response '{}' None Data", crypto_id))?;
-
-//     let price = match vs_currency {
-//         "usd" => price_info.usd,
-//         "eur" => price_info.eur,
-//         "jpy" => price_info.jpy, 
-//         _ => None,
-//     }.ok_or_else(|| format!("Response '{}'None Currnecy Data", vs_currency))?;
-
-//     Ok(price)
-// }
-
-
 
 // 파일 저장 함수 추가
 // 가져온 가격을 CSV 파일에 기록하는 함수
@@ -200,7 +209,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             // 주기적인 작업 : interval 시간이 되면 이 블록이 실행됨
             _ = interval.tick() => {
                 let now = Local::now();
-                 // 설정 값을 fetch_price 함수에 전달
+                 // 설정 값을 fetch_prices 함수에 전달
                 match fetch_prices(&client, &settings.crypto_ids, &settings.vs_currency).await {
                 Ok(prices_map) => {
                     println!("[Time: {}] Data collection success", now.format("%Y-%m-%d %H:%M:%S"));
@@ -220,14 +229,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     }   
                     Err(e) => {
-                        eprintln!("Data Collecting ERROR : {}", e);
+                        eprintln!(" Data Collecting ERROR : {}", e);
                     }
                 }
             }
 
         // 종료 신호 감지 : Ctrl + C 가 눌리면 이 블록이 실행됨.
             _ = signal::ctrl_c() => {
-                println!("CTRL + C => Program safety exit.");
+                println!("\n !! CTRL + C => Program safety exit.");
                 break; // loop를 빠져나감.
             } 
         }
@@ -236,4 +245,4 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Data Colleter is successful exit.");
     Ok(())
 }
-       
+
