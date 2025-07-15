@@ -1,67 +1,37 @@
+코드의 주요 기능별 설명
 
-1. 특정 시간마다 자동으로 비트코인 시세알려주는 코드
+1. 설정 관리 (config.toml & Settings 구조체)
 
-tokio의 interval 기능을 사용해 핵심 로직을 별도의 함수로 분라, main 함수에서는 이 함수를 주기적으로 호출
+프로그램의 모든 동작은 config.toml 파일을 통해 제어됩니다.
+어떤 암호화폐를 (crypto_ids), 어떤 통화를 기준으로 (vs_currency), 몇 초마다 (interval_seconds), 어떤 이름으로 (log_file_prefix) 저장할지 코드 수정 없이 설정 파일만 변경하여 관리할 수 있습니다.
+Settings 구조체는 이 설정 파일의 내용을 프로그램 안으로 안전하게 읽어오는 역할을 합니다.
 
-main.rs 수정된 코드
+2. 데이터 분석 및 통계 (analyze_and_print_stats 함수)
 
-===== 주요 변경사항 설명 =====
+프로그램이 시작되면 가장 먼저 이 기능이 실행됩니다.
+log_file_prefix와 crypto_ids 설정을 바탕으로, 이전에 저장된 price_log_bitcoin.csv, price_log_ethereum.csv 같은 파일들을 순서대로 읽습니다.
+각 파일의 가격 데이터들을 불러와 **퀵 정렬(Quick Sort)**을 이용해 오름차순으로 정렬합니다.
+정렬된 데이터를 바탕으로 각 암호화폐의 최저가, 최고가, 중간값을 계산하여 보여줍니다. 이를 통해 사용자는 프로그램 시작과 동시에 과거 데이터에 대한 통계 정보를 한눈에 파악할 수 있습니다.
 
+3. 퀵 정렬 알고리즘 (quick_sort & partition 함수)
 
-fetch_price 함수 분리: API를 호출하고 결과를 출력하는 핵심 로직을 별도의 비동기 함수로 만들고 이렇게 하면 main 함수의 코드가 더 깔끔해지고 로직을 재사용하기 쉬워짐.
+데이터 분석에 사용되는 핵심 정렬 알고리즘입니다.
+특히, 피벗(pivot)을 선택할 때 '세 값의 중앙값(Median-of-Three)' 방식을 사용하여 안정성을 높였습니다. 이는 배열의 처음, 중간, 마지막 값 중 중간 크기의 값을 피벗으로 삼아, 정렬 성능이 특정 데이터 패턴에 의해 저하되는 것을 방지하는 견고한 방법입니다.
 
-tokio::time::interval 사용: main 함수에서 time::interval(Duration::from_secs(60))를 사용하여 60초 간격으로 신호를 보내는 타이머
+4. 다중 데이터 동시 수집 (fetch_prices 함수)
 
-무한 루프 (loop): loop 블록 안에서 계속해서 작업을 반복
+config.toml에 명시된 모든 암호화폐 ID(["bitcoin", "ethereum", ...])를 콤마(,)로 묶어, 단 한 번의 API 요청으로 모든 가격 정보를 동시에 가져옵니다.
+이는 여러 번 요청을 보내는 것보다 훨씬 효율적이며, reqwest와 tokio의 비동기 처리 능력을 잘 활용하는 예시입니다.
 
-interval.tick().await;: 타이머의 다음 신호가 올 때까지 여기서 실행을 멈추고 대기
+5. 데이터 파일 저장 (log_price_to_csv 함수)
 
-에러 처리: fetch_and_print_price 함수가 실패하여 Err를 반환하더라도, if let을 통해 에러 메시지만 출력하고 루프는 계속되고, 한 번의 네트워크 오류로 인해 전체 프로그램이 중단되는 것을 막을 수 있따.
+가져온 가격 데이터는 각 암호화폐의 이름에 맞춰 별도의 CSV 파일(price_log_bitcoin.csv 등)에 기록됩니다.
+timestamp,price 형식으로 데이터가 계속해서 추가(append)되기 때문에, 시간이 지나도 과거 데이터가 사라지지 않고 차곡차곡 쌓입니다.
 
+6. 주기적인 실행과 우아한 종료 (main 함수와 tokio::select!)
 
-
-2. 데이터를 파일에 저장하도록 만드는 기능
-
-
-main.rs 수정된 코드
-
-===== 주요 변경사항 설명 =====
-
-
-fetch_price 함수 변경: 이제 이 함수는 화면에 출력하는 대신, 가져온 가격(f64)을 Result로 감싸서 반환.
-
--> 가져온 데이터를 다른 함수에서 활용 용이.
-
-log_price_to_csv 함수 추가: 이 함수는 데이터를 파일에 쓰는 역할만 전담합니다.
-
-OpenOptions를 사용하여 파일을 열 때, 파일이 없으면(create(true)) 새로 만들고, 항상 파일 끝에 내용을 추가(append(true))하도록 설정
-
-file.metadata()?.len() == 0 코드로 파일 크기를 확인해서, 0이면 (즉, 방금 새로 만들어졌으면) CSV 헤더(timestamp,price)를 먼저 사용
-
-main 함수 로직 수정:
-
-fetch_price를 호출하여 성공적으로 가격을 가져오면(Ok(price)), 새로 만든 log_price_to_csv 함수를 호출하여 파일에 저장
-
-
-
-3. 설정 파일에서 실행 값 읽어오기
-
-
-main.rs 수정된 코드
-
-===== 주요 변경사항 설명 =====
-
-
-Settings 구조체: config.toml 파일의 구조와 정확히 일치하는 Rust 구조체를 정의했습니다. serde가 이 구조체를 보고 TOML 파일 내용을 자동으로 파싱
-
-동적 API 응답 처리:
-
-API 응답의 키("bitcoin")와 필드("usd")가 설정에 따라 변하므로, HashMap과 Option을 사용하여 어떤 암호화폐/통화 조합이든 처리할 수 있도록 응답 구조체(ApiResponse, PriceData)를 더 유연하게 변경했습니다.
-
-설정 파일 로드:
-
-main 함수 시작 부분에서 config::Config::builder()를 사용하여 config.toml 파일을 읽고, 그 내용을 Settings 구조체 인스턴스로 변환합니다.
-
-설정 값 사용:
-
-API URL 생성, interval 설정, 로그 파일 경로 지정 등 코드에 박혀있던 모든 값들을 settings 변수에서 가져와 사용하도록 수정
+main 함수의 핵심 로직은 loop와 tokio::select! 매크로로 구현되어 있습니다.
+tokio::select!는 두 가지 비동기 작업을 동시에 기다립니다.
+주기적인 작업: interval.tick()을 통해 설정된 시간(예: 60초)이 되면 가격을 가져오는 작업을 수행합니다.
+종료 신호 감지: 사용자가 Ctrl+C를 누르면 signal::ctrl_c()가 이를 감지합니다.
+Ctrl+C가 감지되면, 프로그램은 즉시 종료되지 않고 loop를 빠져나와 "프로그램을 안전하게 종료합니다" 라는 메시지를 출력하며 깔끔하게 마무리됩니다. 이는 데이터 손상을 방지하고 안정성을 높이는 매우 중요한 기능입니다.
